@@ -1,0 +1,458 @@
+---
+title: "`r params$title`"
+format:
+  html:
+    toc: false
+    css: ["style.css"]
+    mainfont: Theinhardt
+    fontsize: "16px"
+    embed-resources: true
+    page-layout: custom
+    link-external-newwindow: true
+    footnotes-hover: true
+    fig-align: center
+    fig-format: retina
+    fig-dpi: 300
+language:
+  section-title-footnotes: "Notes de bas de page"
+params:
+  title: "Quelle part de projets financés par le FNS ont un lien avec l’intelligence artificielle ?"
+  lead: "Entre 2011 et 2024, les subsides liés à l’intelligence artificielle ont considérablement augmenté au FNS. Grâce à des termes clés, nous avons identifié quelles méthodes d’IA dominent dans les différents domaines de recherche."
+  publication_date: "2025-07-17 04:00:00"
+  lang: fr
+  use_theinhardt: false
+  reg_font_path: ""
+  bold_font_path: ""
+  it_font_path: ""
+  boldit_font_path: ""
+  doi_url: "https://doi.org/10.46446/datastory.ai-related-grants"
+  github_url: "https://github.com/snsf-data/datastory_ai_related_grants"
+execute:
+  echo: false
+  warning: false
+  message: false
+editor_options:
+  chunk_output_type: console
+---
+
+```{r general-setup}
+#| include: false
+
+# Install snf.datastory package if not available, otherwise load it
+if (!require("snf.datastory")) {
+  if (!require("devtools")) {
+    install.packages("devtools")
+    library(devtools)
+  }
+  install_github("snsf-data/snf.datastory")
+  library(snf.datastory)
+}
+
+# Load packages
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(conflicted)
+library(here)
+library(ggiraph)
+library(showtext)
+library(systemfonts)
+library(dplyr)
+library(forcats)
+library(readr)
+library(camcorder)
+library(devtools)
+library(ggbump)
+library(ggplot2)
+library(glue)
+library(purrr)
+library(snf.datastory)
+library(stringr)
+
+# Conflict preferences
+conflict_prefer("filter", "dplyr")
+conflict_prefer("get_datastory_theme", "snf.datastory")
+conflict_prefer("get_datastory_scheme", "snf.datastory")
+
+source("R/read_and_prepare_data.R")
+source("R/make_figures.R")
+source("R/utils.R")
+
+use_theinhardt <- params$use_theinhardt
+
+if (use_theinhardt) {
+
+  # Need to register the font to allow its use by ggiraph when creating SVG
+  # files.
+  if (!font_family_exists("Theinhardt")) {
+
+    # Register existing/downloaded fonts
+    register_font(
+      name = "Theinhardt",
+      plain = list(params$reg_font_path, 0),
+      bold = list(params$bol_font_path, 0),
+      italic = list(params$boldit_font_path, 0),
+      bolditalic = list(params$boldit_font_path, 0)
+    )
+  }
+
+  font <- "Theinhardt"
+
+} else {
+
+  font <- "sans"
+
+}
+
+# Need if we want to use the registered font in ggiraph plots
+showtext_auto()
+
+# Increase showtext package font resolution
+showtext_opts(dpi = 300 * 2)
+
+# Set the locale for date formatting (Windows)
+Sys.setlocale(
+  "LC_TIME",
+  switch(
+    params$lang,
+    en = "English",
+    de = "German",
+    fr = "French"
+  )
+)
+
+# Create function to print number with local language-specific format
+print_num <- function(x, lang) {
+
+  if (!(lang %in% c("en", "de", "fr")))
+    stop("`lang` must match any of 'en', 'de', or 'fr'")
+
+  sapply(
+    x,
+    \(x) if (x >= 10000) {
+      if (lang == "en") prettyNum(x, big.mark = ",", decimal.mark = ".")
+      else prettyNum(x, big.mark = "'", decimal.mark = ",")
+    }
+    else {
+      if (lang == "en") prettyNum(x, big.mark = "", decimal.mark = ".")
+      else prettyNum(x, big.mark = "", decimal.mark = ",")
+    })
+}
+
+# Knitr hook for local formatting of printed numbers
+knitr::knit_hooks$set(
+  inline = function(x) {
+    if (!is.numeric(x)) {
+      x
+    } else {
+      print_num(x, params$lang)
+    }
+  }
+)
+
+```
+
+```{r print-header-infos}
+#| results: asis
+
+# Add publication date to header
+cat(format(as.Date(params$publication_date), "%d.%m.%Y"))
+```
+
+**`r params$lead`**
+
+Ce n’est pas une surprise : la recherche en lien avec l’IA a progressé à tous les niveaux. À en croire les gros titres dans les médias, tous les projets ou presque impliqueraient l’IA. Mais la réalité est plus nuancée. Pour mettre les choses en perspective, ce récit présente tout d’abord une définition de la recherche liée à l’IA, puis quantifie l’étendue de son usage dans le cadre des projets encouragés (subsides octroyés) par le FNS au cours des 14 dernières années.
+
+Alors que l’on attribue typiquement le développement de l’IA au domaine MINT (mathématiques, informatique, sciences naturelles et technologie), des études révèlent que les méthodes d’IA ont été largement adoptées dans toutes les disciplines scientifiques.[^2] Ces résultats ont par ailleurs incité à enquêter sur l’impact sociétal de l’IA. Dans la seconde partie du récit, nous abordons les différentes applications de l’IA privilégiées par les trois domaines de recherche d’après les termes clés les plus souvent identifiés sur cette période.
+
+[^2]: [Rapport Artificial Intelligence for Science - CSIRO](https://www.csiro.au/en/research/technology-space/ai/Artificial-Intelligence-for-Science-report).
+
+L’analyse du texte des projets encouragés fournit une base potentielle pour comprendre le rôle joué par l’IA dans la recherche financée par le FNS. Pour ce faire, nous avons appliqué une stratégie transparente et reproductible en recourant à des termes clés pour identifier la recherche liée à l’IA. Alors que certains des projets encouragés liés à l’IA développent des systèmes ou des techniques d’IA, d’autres appliquent des méthodes d’IA pour répondre à des questions de recherche. Une troisième catégorie étudie l’impact de l’IA sur la société sans nécessairement utiliser ou développer de telles méthodes.
+
+Dessiner le futur de la recherche fait partie des priorités stratégiques du FNS. Cette recherche de termes clés constituera l’une des bases pour des discussions plus approfondies à propos des effets de l’IA tant sur la recherche proprement dite que sur sa politique d’encouragement.
+
+### Monitoring de la recherche liée à l’IA au sein du FNS
+
+L’IA englobe un large éventail de technologies et de méthodes, telles que l’apprentissage automatique, les réseaux neuronaux et le traitement du langage naturel (voir encadré bleu pour les définitions des concepts clés en matière d’IA). En nous appuyant sur de précédentes études,[^3] nous avons utilisé une liste prédéfinie de termes clés liés à l’IA afin de procéder à une recherche des titres, mots-clés et résumés utilisés dans les projets encouragés par le FNS. Cette sélection est le fruit d’un choix méticuleux et réfléchi, car les listes de termes liés à l’IA utilisés diffèrent selon les études.
+
+[^3]: [Mapping ERC frontier research artificial intelligence - Office des publications de l’Union européenne](https://op.europa.eu/fr/publication-detail/-/publication/c7865738-eb38-11ee-bf53-01aa75ed71a1) ; [Identifying and measuring developments in artificial intelligence | OCDE](https://www.oecd.org/en/publications/identifying-and-measuring-developments-in-artificial-intelligence_5f65ff7e-en.html).
+
+::: info-box
+
+### Quelques concepts clés en matière d’intelligence artificielle
+
+- **Intelligence artificielle :** désigne globalement la reproduction de l’intelligence humaine par les machines. Il n’existe pas de définition de l’IA unanimement acceptée. La loi européenne sur l’intelligence artificielle définit un système d’IA comme « un système automatisé qui est conçu pour fonctionner à différents niveaux d’autonomie et peut faire preuve d’une capacité d’adaptation après son déploiement, et qui, pour des objectifs explicites ou implicites, déduit, à partir des entrées qu’il reçoit, la manière de générer des sorties telles que des prédictions, du contenu, des recommandations ou des décisions qui peuvent influencer les environnements physiques ou virtuels ».[^4]
+
+
+- **Apprentissage automatique (ou machine learning) :** utilisation et développement d’algorithmes statistiques capables d’identifier des modèles dans les données et de prendre des décisions ou de faire des prédictions sur la base de ces modèles sans instructions explicites.
+- **Réseau neuronal :** désigne en informatique un modèle de calcul inspiré du cerveau humain. Il est constitué de nœuds interconnectés (neurones), organisés en couches, qui traitent les informations.
+- **Apprentissage en profondeur (ou deep learning) :** sous-ensemble de l’apprentissage automatique qui utilise les réseaux neuronaux artificiels constitués de nombreuses couches (réseaux de neurones profonds) pour analyser des modèles complexes dans de grands ensembles de données.
+- **Traitement du langage naturel :** vise à permettre aux machines de comprendre, d’interpréter et de répondre au langage humain. Les tâches principales comprennent la reconnaissance vocale, la classification des textes et la génération de langage naturel.
+- **Vision par ordinateur :** vise à permettre aux machines d’interpréter des données visuelles et de prendre des décisions basées sur celles-ci. Elle utilise des techniques d’apprentissage automatique pour reconnaître des objets, détecter des modèles et extraire des informations significatives à partir d’images et de vidéos.
+
+[^4]: [Loi sur l’IA de l’UE, art. 3](https://artificialintelligenceact.eu/fr/article/3/), 2025.
+
+:::
+
+Pour identifier les recherches liées à l’IA dans les projets encouragés par le FNS à partir de leurs titres, mots-clés et résumés, nous avons utilisé une liste de termes clés (Tableau 1) publiée dans une analyse bibliométrique réalisée par la Commission européenne.[^5] Nous avons toutefois adapté la méthodologie. Nous avons relevé quelques termes ambigus susceptibles de se rapporter à un concept lié à l’IA mais pas exclusivement (p. ex. « neural net\* » peut aussi désigner un réseau neuronal biologique, et « face detection » peut désigner la capacité humaine à détecter un visage). Si un projet encouragé comportait l’un de ces termes ambigus, nous avons posé comme exigence la présence d’un deuxième terme pour pouvoir classer le projet comme lié à l’IA.
+
+[^5]: [Trends in the use of AI in science - Office des publications de l’Union européenne](https://op.europa.eu/fr/publication-detail/-/publication/2458267c-08df-11ee-b12e-01aa75ed71a1).
+
+::: plot-box
+<div class="plot-title">Liste des termes clés liés à l’IA utilisés dans la présente analyse</div>
+```{r table-1}
+#| classes: plain
+
+table_1 <-
+  matrix(
+    c(
+      "Artificial intellig*", "Gesture recognition (§)", "Meta-learning", "Semi-supervised learning",
+      "Automated reasoning", "Image classification", "Multilayer perceptron*", "Sentiment analysis",
+      "Backpropagation", "Image recognition", "Natural language processing", "Speech recognition (§)",
+      "Computer vision", "Image segmentation", "Neural net* (§)", "Statistical learning",
+      "Data mining (§)", "Information retrieval (§)", "Object detection (§)", "Supervised learning",
+      "Data science (§)", "Intelligent machine*", "Object identification (§)", "Text classification",
+      "Deep learning", "Kernel machine*", "Object recognition (§)", "Transfer learning",
+      "Expert system*", "Knowledge representation", "Pattern recognition (§)", "Transformer net*",
+      "Face detection (§)", "Machine intelligence", "Pose estimation", "Unsupervised learning",
+      "Feature extraction", "Machine learning", "Reinforcement learning", "Voice recognition (§)",
+      "General adversarial net*", "Machine translation", "Semantic search", ""
+    ),
+    nrow = 11,
+    ncol = 4,
+    byrow = TRUE
+  )
+
+gt::gt(as.data.frame(table_1)) |>
+  gt::tab_options(table.align = "left",column_labels.hidden = TRUE)
+
+```
+::: caption
+Tableau 1. Les termes suivis du symbole § ont été classés comme ambigus et ont nécessité la présence d’un deuxième terme lié à l’IA pour qu’un projet encouragé soit identifié comme lié à l’IA. Le stemming (ou racinisation) a été utilisé sur certains termes conformément à l’étude menée par la Commission européenne (p. ex. Neural net\*).
+:::
+:::
+
+### Augmentation de la recherche liée à l’IA
+
+À l’aide de ces termes clés, nous avons identifié un total de 1306 projets encouragés liés à l’IA entre 2011 et 2024, soit près de 6 % de l’ensemble des subsides octroyés par le FNS sur cette période. La part de projets encouragés a été inférieure à 5 % jusqu’en 2017, mais a dépassé 10 % dès 2021 (figure 1). 47 % des projets identifiés concernent les mathématiques, l’informatique, les sciences naturelles et la technologie (MINT), 23 % sont multi-domaines,[^6] 16 % concernent les sciences de la vie (SV) et 14 % les sciences humaines et sociales (SHS).
+
+[^6]: Sont qualifiés de multi-domaines les projets encouragés dans lesquels des disciplines d’au moins deux des trois domaines de recherche (SHS, MINT ou SV) sont répertoriées comme disciplines principales dans la requête.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">La part de projets encouragés liés à l’IA a commencé à augmenter en 2017</div>
+```{r plot-desktop-1}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_desktop_figure_1()
+
+```
+::: caption
+Figure 1. Part des projets encouragés contenant au moins un terme clé lié à l’IA dans leur titre, mots-clés ou résumé (ou au moins deux termes clés si ces termes sont ambigus).
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">La part de projets encouragés liés à l’IA a commencé à augmenter en 2017</div>
+```{r plot-mobile-1}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_mobile_figure_1()
+
+```
+::: caption
+Figure 1. Part des projets encouragés contenant au moins un terme clé lié à l’IA dans leur titre, mots-clés ou résumé (ou au moins deux termes clés si ces termes sont ambigus).
+:::
+:::
+:::
+
+L’augmentation de la recherche liée à l’IA est visible dans tous les domaines de recherche (figure 2). D’après nos observations, ce sont les projets multi-domaines qui présentent la part la plus élevée de recherche liée à l’IA. Alors que celle-ci est restée inférieure à 10 % jusqu’en 2017, elle a dépassé pour la première fois les 20 % en 2023. Il est avéré que la collaboration interdisciplinaire dans la recherche est cruciale, car elle favorise l’application efficace des méthodes d’IA dans différents domaines de recherche. En outre, l’intégration d’idées et de problématiques de recherche issues de disciplines variées constitue un important moteur de développement des technologies d’IA.[^7]
+
+[^7]: [Frontiers | Interdisciplinary Research in Artificial Intelligence: Challenges and Opportunities](https://www.frontiersin.org/journals/big-data/articles/10.3389/fdata.2020.577974/full).
+
+Nous observons une augmentation similaire des projets encouragés liés à l’IA dans les disciplines MINT, où la part a franchi pour la première fois la barre des 10 % en 2019 et dépassé 20 % en 2023. Une hausse de la recherche liée à l’IA a aussi été enregistrée dans les SV et SHS. Toutefois, le niveau de départ était inférieur et l’augmentation moins prononcée que pour les projets encouragés relevant des MINT et multi-domaines. Dans les SHS, la part des projets encouragés liés à l’IA est restée sous les 5 % jusqu’en 2017 et se situe au-dessus des 10 % depuis 2023. Dans les SV, la part des projets encouragés liés à l’IA était inférieure à 5 % jusqu’en 2020 et oscille depuis entre 5 % et 10 %.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">La part de projets encouragés liés à l’IA a davantage augmenté pour les projets multi-domaines et relevant des MINT</div>
+```{r plot-desktop-2}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_desktop_figure_2()
+
+```
+::: caption
+Figure 2. Part des projets encouragés contenant au moins un terme clé lié à l’IA dans leur titre, mots-clés ou résumé (ou au moins deux termes clés si ces termes sont ambigus), classés par domaine de recherche.
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">La part de projets encouragés liés à l’IA a davantage augmenté pour les projets multi-domaines et relevant des MINT</div>
+```{r plot-mobile-2}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_mobile_figure_2()
+
+```
+::: caption
+Figure 2. Part des projets encouragés contenant au moins un terme clé lié à l’IA dans leur titre, mots-clés ou résumé (ou au moins deux termes clés si ces termes sont ambigus), classés par domaine de recherche.
+:::
+:::
+:::
+
+### Termes clés par domaine de recherche
+
+Parmi tous les projets encouragés liés à l’IA identifiés, les termes clés les plus fréquents sont « machine learning », « artificial intellig\* », « deep learning », « neural net\* » et « computer vision ». Cela s’explique probablement par l’étendue de leur signification, car la plupart de ces termes recouvrent un ensemble de concepts, de techniques ou d’applications, plutôt qu’une méthode spécifique. Les figures suivantes montrent l’évolution des 10 termes clés les plus fréquents pour les projets encouragés dans les domaines SHS, MINT et SV. Nous n’avons pas inclus les projets encouragés multi-domaines dans ces représentations visuelles, car ils sont plus hétérogènes.
+
+Dans les SHS, après « artificial intellig\* » et « machine learning », le terme clé le plus fréquent est « natural language processing », suivi par « deep learning », « data science », « reinforcement learning », et « neural net\* » (figure 3). L’utilisation fréquente du traitement du langage naturel dans les SHS n’a rien de surprenant, car cette méthode permet d’analyser de vaste corpus de textes.
+
+En examinant les résumés des projets SHS identifiés, nous avons constaté qu’ils peuvent être classés en deux catégories. Certains appliquent des méthodes d’IA ou d’apprentissage automatique pour répondre aux problématiques de recherche. Par exemple, pour un [subside octroyé en 2020](https://data.snf.ch/grants/grant/197640), l’équipe de recherche explore un corpus de programmes électoraux à l’aide du traitement du langage naturel pour déterminer l’évolution des identités des partis politiques. D’autres projets encouragés liés à l’IA étudient l’impact sociétal du développement et du déploiement de l’IA. Par exemple, en s’appuyant sur l’analyse de la documentation ainsi que sur une enquête et des interviews d’expert·es, des chercheuses et chercheurs bénéficiant d’un [subside octroyé en 2024](https://data.snf.ch/grants/grant/10003244) examinent la manière dont les administrations publiques utilisent l’IA dans leur pratique administrative et évaluent les conditions dans lesquelles les citoyen·nes et les expert·es soutiennent cette utilisation.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">Termes clés de l’IA dans les projets SHS encouragés</div>
+```{r plot-desktop-3}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_3()
+
+```
+::: caption
+Figure 3. Évolution du classement des 10 termes clés liés à l’IA les plus fréquents dans les projets SHS encouragés. Si un terme clé sort du « top 10 » avant la fin de la période d’observation, la ligne est supprimée. Si un terme clé sort temporairement du « top 10 », la ligne devient transparente jusqu’à ce qu’il le réintègre.
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">Termes clés de l’IA dans les projets SHS encouragés</div>
+```{r plot-mobile-3}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_3()
+
+```
+::: caption
+Figure 3. Évolution du classement des 10 termes clés liés à l’IA les plus fréquents dans les projets SHS encouragés. Si un terme clé sort du « top 10 » avant la fin de la période d’observation, la ligne est supprimée. Si un terme clé sort temporairement du « top 10 », la ligne devient transparente jusqu’à ce qu’il le réintègre.
+:::
+:::
+:::
+
+Dans les MINT, les termes clés les plus fréquents que nous avons identifiés sont « machine learning », « neural net\* », « deep learning », « computer vision », « artificial intellig\* », « reinforcement learning » et « data science ». De nombreux projets encouragés, notamment en ingénierie et en mathématiques, servent à développer des systèmes ou des technologies d’IA, telles que des méthodes d’apprentissage automatique. Lorsque les projets MINT encouragés ne développent pas eux-mêmes des méthodes d’IA, ils appliquent généralement celles-ci dans différentes disciplines pour analyser des données, faire des simulations, traiter des images ou améliorer les capacités de robots, par exemple.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">Termes clés de l’IA dans les projets MINT encouragés</div>
+```{r plot-desktop-4}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_4()
+
+```
+::: caption
+Figure 4. Évolution du classement des 10 termes clés liés à l’IA les plus fréquents dans les projets MINT encouragés. Si un terme clé sort du « top 10 » avant la fin de la période d’observation, la ligne est supprimée. Si un terme clé sort temporairement du « top 10 », la ligne devient transparente jusqu’à ce qu’il le réintègre.
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">Termes clés de l’IA dans les projets MINT encouragés</div>
+```{r plot-mobile-4}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_4()
+
+```
+::: caption
+Figure 4. Évolution du classement des 10 termes clés liés à l’IA les plus fréquents dans les projets MINT encouragés. Si un terme clé sort du « top 10 » avant la fin de la période d’observation, la ligne est supprimée. Si un terme clé sort temporairement du « top 10 », la ligne devient transparente jusqu’à ce qu’il le réintègre.
+:::
+:::
+:::
+
+Dans les SV, les termes clés les plus fréquents sont « machine learning », « artificial intellig\* », « deep learning », « neural net\* », « reinforcement learning », « computer vision » et « pattern recognition » (figure 5). Un grand nombre des projets encouragés identifiés applique un large panel de méthodes d’apprentissage automatique pour analyser des données et des images, répondre à des problématiques de recherche spécifiques, développer des outils de diagnostic et des procédures thérapeutiques, ainsi que prévoir les résultats des traitements. Alors que ces projets ont pour objectif prioritaire d’appliquer l’IA pour répondre aux problématiques de recherche, dans certains cas, les résultats de recherche servent ensuite à améliorer ces méthodes.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">Termes clés de l’IA dans les projets SV encouragés</div>
+```{r plot-desktop-5}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_5()
+
+```
+::: caption
+Figure 5. Évolution du classement des 10 termes clés liés à l’IA les plus fréquents dans les projets SV encouragés. Si un terme clé sort du « top 10 » avant la fin de la période d’observation, la ligne est supprimée. Si un terme clé sort temporairement du « top 10 », la ligne devient transparente jusqu’à ce qu’il le réintègre.
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">Termes clés de l’IA dans les projets SV encouragés</div>
+```{r plot-mobile-5}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_5()
+
+```
+::: caption
+Figure 5. Évolution du classement des 10 termes clés liés à l’IA les plus fréquents dans les projets SV encouragés. Si un terme clé sort du « top 10 » avant la fin de la période d’observation, la ligne est supprimée. Si un terme clé sort temporairement du « top 10 », la ligne devient transparente jusqu’à ce qu’il le réintègre.
+:::
+:::
+:::
+
+### Une base solide pour d’autres analyses
+
+Force est de constater que la recherche liée à l’IA a considérablement augmenté dans tous les domaines de recherche, en particulier ces huit dernières années. Dans le cadre de notre analyse, nous avons décrit une approche basée sur la recherche d’un ensemble de termes clés liés à l’IA dans les projets encouragés afin de déterminer la part de la recherche liée à l’IA au sein du FNS. Cette méthode est largement utilisée par les organisations de recherche et dans les études bibliométriques pour fournir un aperçu du secteur de l’IA et de son évolution. L’approche adoptée est transparente, reproductible et modulable. Il est p. ex. possible d’ajouter des termes clés et d’appliquer l’approche à d’autres données, telles que des publications. En raison de l’évolution rapide de l’IA, notre liste de termes clés nécessitera une mise à jour régulière pour inclure les derniers développements. Le jeu de termes clés peut également être adapté pour répondre à de nouvelles problématiques.
+
+L’utilisation d’une liste statique de termes clés présente des inconvénients. Leur choix influence naturellement l’identification des projets encouragés, et aucune liste de termes clés ne permettra d’identifier parfaitement tous les projets encouragés liés à l’IA. Dans une analyse préliminaire, nous avons comparé trois listes de termes différentes et affiné notre approche en vue de maximiser l’inclusion de la recherche liée à l’IA tout en maintenant le taux de faux positifs à un niveau bas. Les projets encouragés liés à l’IA qui ne contiennent aucun de ces termes clés dans leurs titres, mots-clés ou résumés ne seront néanmoins pas pris en compte. En raison de l’usage différencié de l’IA dans les différents domaines de recherche, il n’est pas certain que ces derniers adoptent tous une approche comparable. Une telle approche est par conséquent utile pour identifier la recherche liée à l’IA, mais des analyses plus détaillées des projets encouragés sont nécessaires pour mieux comprendre le rôle de l’IA dans chaque projet. Nous sommes toutefois persuadés que celle-ci fournit une base solide pour identifier la recherche liée à l’IA au sein du FNS et analyser son contenu plus en détail.
+
+Le FNS utilisera cette approche pour développer une meilleure compréhension de la recherche liée à l’IA et concevoir ainsi des processus d’application et d’évaluation sur mesure pour celle-ci. Cela nous permettra aussi de surveiller les résultats de recherche dans le domaine de l’IA. Au-delà de ces analyses, le FNS surveille les développements nationaux et internationaux sur l’IA dans la recherche pour être prêt à s’adapter aux changements importants dans le paysage de la recherche.
+
+::: info-box
+
+### Quel type de données avons-nous utilisé ?
+
+Cette analyse a porté sur l’ensemble des projets rédigés en anglais, figurant sous Encouragement de projets et Carrières, dont les subsides ont été octroyés entre 2011 et 2024. L’échantillon inclut 21 784 projets encouragés au total. Nous avons intégré toutes les variables nécessaires pour identifier les projets encouragés et effectuer la recherche de termes clés, ainsi que des informations complémentaires : titre, mots-clés, résumé, numéro du subside, offre d’encouragement, domaine de recherche et disciplines.
+
+Pour analyser les occurrences des différents termes clés, nous avons quantifié le nombre de projets encouragés dans lesquels apparaissait chaque terme clé. Chaque terme clé n’a été comptabilisé qu’une seule fois par projet encouragé. Par conséquent, même si un terme est apparu plusieurs fois, par exemple, dans le titre et le résumé d’un projet encouragé, il n’a été comptabilisé qu’une fois.
+
+### Comment avons-nous identifié les projets encouragés liés à l’IA ?
+
+Pour tous les projets encouragés inclus, nous avons recherché une liste de termes liés à l’IA dans les titres, les mots-clés et les résumés des projets. Dès lors que ces parties d’un projet contenaient au moins l’un de ces termes, le subside a été défini comme lié à l’IA et inclus dans l’analyse pour ce récit de données. Nous avons classé certains des termes comme ambigus (les termes marqués d’un symbole « paragraphe » dans la liste des termes clés). Dans ce cas, la présence d’au moins un terme lié à l’IA supplémentaire dans le titre, les mots-clés ou le résumé a été nécessaire pour qu’un projet encouragé soit classé comme lié à l’IA.
+
+:::
+
+Les données, le texte et le code de ce récit de données sont [disponibles sur Github](`r params$github_url`) et [archivés sur Zenodo](`r params$doi_url`). <br>DOI: `r str_remove(params$doi_url, "https://doi.org/")`
+
+```{r prevent-internal-snsf-packages}
+#| include: false
+
+# Internal SNSF packages must not be used in data stories, as their
+# pre-processing functions are internal and the corporate design differs from
+# the data portal.
+
+internal_pkg <- c("snfverse", "snf.preprocessing", "snf.plot")
+
+if (any(internal_pkg %in% loadedNamespaces())) {
+  stop(glue(
+    "You must not use internal SNSF packages in data stories.",
+    " Please resort to snf.datastory."
+  ))
+}
+```

@@ -1,0 +1,460 @@
+---
+title: "`r params$title`"
+format:
+  html:
+    toc: false
+    css: ["style.css"]
+    mainfont: Theinhardt
+    fontsize: "16px"
+    embed-resources: true
+    page-layout: custom
+    link-external-newwindow: true
+    footnotes-hover: true
+    fig-align: center
+    fig-format: retina
+    fig-dpi: 300
+language:
+  section-title-footnotes: "Footnotes"
+params:
+  title: "How much of SNSF-funded research is related to artificial intelligence?"
+  lead: "SNSF-funded research related to AI increased significantly between 2011 and 2024. By applying an approach using key terms to identify AI-related grants, we could illustrate the methods preferred by the different research domains."
+  publication_date: "2025-07-17 04:00:00"
+  lang: en
+  use_theinhardt: false
+  reg_font_path: ""
+  bold_font_path: ""
+  it_font_path: ""
+  boldit_font_path: ""
+  doi_url: "https://doi.org/10.46446/datastory.ai-related-grants"
+  github_url: "https://github.com/snsf-data/datastory_ai_related_grants"
+execute:
+  echo: false
+  warning: false
+  message: false
+editor_options:
+  chunk_output_type: console
+---
+
+```{r general-setup}
+#| include: false
+
+# Install snf.datastory package if not available, otherwise load it
+if (!require("snf.datastory")) {
+  if (!require("devtools")) {
+    install.packages("devtools")
+    library(devtools)
+  }
+  install_github("snsf-data/snf.datastory")
+  library(snf.datastory)
+}
+
+# Load packages
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(conflicted)
+library(here)
+library(ggiraph)
+library(showtext)
+library(systemfonts)
+library(dplyr)
+library(forcats)
+library(readr)
+library(camcorder)
+library(devtools)
+library(ggbump)
+library(ggplot2)
+library(glue)
+library(purrr)
+library(snf.datastory)
+library(stringr)
+
+# Conflict preferences
+conflict_prefer("filter", "dplyr")
+conflict_prefer("get_datastory_theme", "snf.datastory")
+conflict_prefer("get_datastory_scheme", "snf.datastory")
+
+source("R/read_and_prepare_data.R")
+source("R/make_figures.R")
+source("R/utils.R")
+
+use_theinhardt <- params$use_theinhardt
+
+if (use_theinhardt) {
+
+  # Need to register the font to allow its use by ggiraph when creating SVG
+  # files.
+  if (!font_family_exists("Theinhardt")) {
+
+    # Register existing/downloaded fonts
+    register_font(
+      name = "Theinhardt",
+      plain = list(params$reg_font_path, 0),
+      bold = list(params$bol_font_path, 0),
+      italic = list(params$boldit_font_path, 0),
+      bolditalic = list(params$boldit_font_path, 0)
+    )
+  }
+
+  font <- "Theinhardt"
+
+} else {
+
+  font <- "sans"
+
+}
+
+# Need if we want to use the registered font in ggiraph plots
+showtext_auto()
+
+# Increase showtext package font resolution
+showtext_opts(dpi = 300 * 2)
+
+# Set the locale for date formatting (Windows)
+Sys.setlocale(
+  "LC_TIME",
+  switch(
+    params$lang,
+    en = "English",
+    de = "German",
+    fr = "French"
+  )
+)
+
+# Create function to print number with local language-specific format
+print_num <- function(x, lang) {
+
+  if (!(lang %in% c("en", "de", "fr")))
+    stop("`lang` must match any of 'en', 'de', or 'fr'")
+
+  sapply(
+    x,
+    \(x) if (x >= 10000) {
+      if (lang == "en") prettyNum(x, big.mark = ",", decimal.mark = ".")
+      else prettyNum(x, big.mark = "'", decimal.mark = ",")
+    }
+    else {
+      if (lang == "en") prettyNum(x, big.mark = "", decimal.mark = ".")
+      else prettyNum(x, big.mark = "", decimal.mark = ",")
+    })
+}
+
+# Knitr hook for local formatting of printed numbers
+knitr::knit_hooks$set(
+  inline = function(x) {
+    if (!is.numeric(x)) {
+      x
+    } else {
+      print_num(x, params$lang)
+    }
+  }
+)
+
+```
+
+```{r print-header-infos}
+#| results: asis
+
+# Add publication date to header
+cat(format(as.Date(params$publication_date), "%d.%m.%Y"))
+```
+
+**`r params$lead`**
+
+It comes as no surprise that AI-related research has increased across the board. Headlines today would lead one to believe that almost all projects involve AI. The reality is more nuanced. To put things in perspective, this story first defines what is meant by AI-related research before quantifying the extent of its usage in grants awarded by the SNSF over the last 14 years. 
+
+While the development of AI is typically attributed to disciplines in the mathematics, informatics, natural sciences and technology (MINT) domain, studies report a widespread adoption of AI methods across all scientific disciplines.[^2] This has furthermore motivated investigations into the societal impact of AI. The second half of the story breaks down the different applications of AI preferred by the three research domains based on the most repeated key terms over time.
+
+[^2]: [Artificial Intelligence for Science report - CSIRO](https://www.csiro.au/en/research/technology-space/ai/Artificial-Intelligence-for-Science-report).
+
+Textual analysis of funded grants provides a potential basis for understanding the role AI plays in SNSF-funded research. To do so, we applied a transparent and reproducible strategy using key terms to identify AI-related research. While some AI-related grants develop AI systems or techniques, others apply AI methods to answer research questions. A third category investigates the impact of AI on society without necessarily using or developing these methods. 
+
+Shaping the future of research is one of the SNSF’s strategic priorities. This search of key terms will serve as one basis for broader discussions on the effects that AI is having both on research itself and on research funding policy. 
+
+### Monitoring AI-related research at the SNSF
+
+AI encompasses a wide range of technologies and methods, such as machine learning, neural networks and natural language processing (see the blue box for definitions of key AI concepts). Based on previous studies,[^3] we used a predefined list of AI-related key terms to query the titles, keywords and summaries of SNSF-funded grants. This selection was an important and conscious choice because distinct lists of AI-related terms have been used in different studies.
+
+[^3]: [Mapping ERC frontier research artificial intelligence - Publications Office of the EU](https://op.europa.eu/en/publication-detail/-/publication/c7865738-eb38-11ee-bf53-01aa75ed71a1); [Identifying and measuring developments in artificial intelligence | OECD](https://www.oecd.org/en/publications/identifying-and-measuring-developments-in-artificial-intelligence_5f65ff7e-en.html).
+
+::: info-box
+
+### Some key concepts of artificial intelligence
+
+- **Artificial Intelligence:** Term that refers broadly to the reproduction of human intelligence in machines. There is no universally accepted definition of AI. The AI Act defines an AI system as “a machine-based system that is designed to operate with varying levels of autonomy and that may exhibit adaptiveness after deployment, and that, for explicit or implicit objectives, infers, from the input it receives, how to generate outputs such as predictions, content, recommendations, or decisions that can influence physical or virtual environments.”[^4] 
+
+
+- **Machine learning:** The use and development of statistical algorithms that are capable of identifying patterns in data and making decisions or predictions based on these patterns without explicit instructions.
+- **Neural network:** In computer science, a neural network refers to a computational model that is inspired by the human brain. It consists of interconnected nodes (neurons) that process information in layers. 
+- **Deep learning:** A subset of machine learning that uses artificial neural networks with many layers (deep neural networks) to analyse complex patterns in large datasets.
+- **Natural language processing:** A field focused on enabling machines to understand, to interpret and to respond to human language. Important tasks include speech recognition, text classification and natural language generation.
+- **Computer vision:** A field that enables machines to interpret and make decisions based on visual data. It uses machine learning techniques to recognise objects, to detect patterns and to extract insights from images and videos.
+
+[^4]: [EU AI Act, Art. 3,](https://artificialintelligenceact.eu/article/3/) 2025.
+
+:::
+
+To identify AI-related research in SNSF-funded projects based on their titles, keywords and summaries, we used a list of key terms (Table 1) published in a bibliometric analysis conducted by the European Commission;[^5] however, we adapted the methodology. We identified some ambiguous terms that can refer to an AI-related concept but not exclusively (e.g. “neural net\*” may also refer to a biological neural network, and “face detection” may refer to the human ability to detect a face). If a grant included one of these ambiguous terms, we required the presence of a second term to classify the grant as AI-related.
+
+[^5]: [Trends in the use of AI in science - Publications Office of the EU](https://op.europa.eu/en/publication-detail/-/publication/2458267c-08df-11ee-b12e-01aa75ed71a1).
+
+::: plot-box
+<div class="plot-title">List of AI-related key terms used in this analysis</div>
+```{r table-1}
+#| classes: plain
+
+table_1 <-
+  matrix(
+    c(
+      "Artificial intellig*", "Gesture recognition (§)", "Meta-learning", "Semi-supervised learning",
+      "Automated reasoning", "Image classification", "Multilayer perceptron*", "Sentiment analysis",
+      "Backpropagation", "Image recognition", "Natural language processing", "Speech recognition (§)",
+      "Computer vision", "Image segmentation", "Neural net* (§)**", "Statistical learning",
+      "Data mining (§)", "Information retrieval (§)", "Object detection (§)", "Supervised learning",
+      "Data science (§)", "Intelligent machine*", "Object identification (§)", "Text classification",
+      "Deep learning", "Kernel machine*", "Object recognition (§)", "Transfer learning",
+      "Expert system*", "Knowledge representation", "Pattern recognition (§)", "Transformer net*",
+      "Face detection (§)", "Machine intelligence", "Pose estimation", "Unsupervised learning",
+      "Feature extraction", "Machine learning", "Reinforcement learning", "Voice recognition (§)",
+      "General adversarial net*", "Machine translation", "Semantic search", ""
+    ),
+    nrow = 11,
+    ncol = 4,
+    byrow = TRUE
+  )
+
+gt::gt(as.data.frame(table_1)) |>
+  gt::tab_options(table.align = "left",column_labels.hidden = TRUE)
+
+```
+::: caption
+Table 1. Terms marked with a section symbol (§) were classified as ambiguous and required the presence of a second AI-related term to identify a grant as AI-related. Stemming was used on some terms in accordance with the study by the European Commission (e.g. Neural net\*).
+:::
+:::
+
+### Increase in AI-related research
+
+Using these key terms, we identified a total of 1,306 AI-related grants between 2011 and 2024 – about 6% of all grants awarded by the SNSF in this period. The share of grants was below 5% until 2017 but by 2021 had surpassed 10% (Figure 1). 47% of the identified grants were in mathematics, informatics, natural sciences and technology (MINT), 23% were multi-domain,[^6] 16% in life sciences (LS), and 14% in social sciences and humanities (SSH).
+
+[^6]: Multi-domain refers to grants in which disciplines from more than one of the three research domains (SSH, MINT or LS) were listed as main disciplines in the application.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">The share of AI-related grants started to increase in 2017</div>
+```{r plot-desktop-1}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_desktop_figure_1()
+
+```
+::: caption
+Figure 1. Share of grants containing at least one AI-related key term in their title, keywords, or summary (or at least two key terms in the case that they are ambiguous).
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">The share of AI-related grants started to increase in 2017</div>
+```{r plot-mobile-1}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_mobile_figure_1()
+
+```
+::: caption
+Figure 1. Share of grants containing at least one AI-related key term in their title, keywords, or summary (or at least two key terms in the case that they are ambiguous).
+:::
+:::
+:::
+
+ 
+
+The increase in AI-related research is visible across all research domains (Figure 2). We observe the highest share of research related to AI in multi-domain grants and whilst it remained below 10% until 2017, it surpassed 20% for the first time in 2023. Interdisciplinary collaboration in AI research is known to be crucial since it promotes the effective application of AI methods in different research domains. In addition, incorporating ideas and research questions from diverse disciplines are important drivers for developing AI technologies.[^7]
+
+[^7]: [Frontiers | Interdisciplinary Research in Artificial Intelligence: Challenges and Opportunities](https://www.frontiersin.org/journals/big-data/articles/10.3389/fdata.2020.577974/full).
+
+We observe a similar increase in AI-related grants in MINT, where the share reached more than 10% for the first time in 2019 and surpassed 20% in 2023. There was also an increase in AI-related research in LS and SSH, although starting from a lower baseline and less pronounced than in MINT and multi-domain grants. In SSH, the share of AI-related grants remained below 5% until 2017 and has been above 10% since 2023. In LS, the share of AI-related grants was below 5% until 2020 and has since hovered between 5% and 10%.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">The share of grants related to AI has increased more in multi-domain and MINT grants</div>
+```{r plot-desktop-2}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_desktop_figure_2()
+
+```
+::: caption
+Figure 2. Share of grants containing at least one AI-related key term in their title, keywords or summary (or at least two key terms in the case that they are ambiguous) categorised by research domain.
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">The share of grants related to AI has increased more in multi-domain and MINT grants</div>
+```{r plot-mobile-2}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_mobile_figure_2()
+
+```
+::: caption
+Figure 2. Share of grants containing at least one AI-related key term in their title, keywords or summary (or at least two key terms in the case that they are ambiguous) categorised by research domain.
+:::
+:::
+:::
+
+### Key terms by research domain
+
+Within all identified AI-related grants, the most prevalent key terms are “machine learning”, “artificial intellig\*”, “deep learning”, “neural net\*”, and “computer vision”. This is likely due to their breadth since most of these terms represent a collection of concepts, techniques or applications, rather than a specific method. The following figures show the top 10 most prevalent key terms for SSH, MINT and LS grants over time. We did not include multi-domain grants in these visualisations, as they are more heterogeneous.
+
+In SSH, after “artificial intellig\*” and “machine learning”, the most frequent key term is “natural language processing”, followed by “deep learning”, “data science”, “reinforcement learning”, and “neural net\*” (Figure 3). It is not surprising that natural language processing is highly used in SSH disciplines, given that this method can be used to analyse large corpuses of text. 
+
+Looking at the summaries of the identified SSH grants, we find that they often fall into one of two categories. Some apply AI or machine learning methods to answer research questions. For example, in a [grant awarded in 2020](https://data.snf.ch/grants/grant/197640), the researchers are mining a corpus of electoral programmes using natural language processing to identify how identities of political parties can evolve over time. Other AI-related grants in SSH investigate how the development and deployment of AI impact society. For example, based on analysis of documentation combined with a survey and expert interviews, researchers in a [grant awarded in 2024](https://data.snf.ch/grants/grant/10003244) are aiming to understand how public administrations use AI in their administrative practice and to evaluate the conditions under which citizens and experts support such usage.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">AI key terms in SSH grants </div>
+```{r plot-desktop-3}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_3()
+
+```
+::: caption
+Figure 3. Ranking of the 10 most prevalent AI-related key terms in SSH grants over time. If a key term drops out of the top 10 until the end of the observation period, the line is discontinued. If a key term drops out of the top 10 temporarily, the line becomes transparent until the key term once again enters the top 10. 
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">AI key terms in SSH grants </div>
+```{r plot-mobile-3}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_3()
+
+```
+::: caption
+Figure 3. Ranking of the 10 most prevalent AI-related key terms in SSH grants over time. If a key term drops out of the top 10 until the end of the observation period, the line is discontinued. If a key term drops out of the top 10 temporarily, the line becomes transparent until the key term once again enters the top 10. 
+:::
+:::
+:::
+
+In MINT, the most prevalent key terms we identified are “machine learning”, “neural net\*”, “deep learning”, “computer vision”, “artificial intellig\*”, “reinforcement learning”, and “data science”. Many grants, particularly within engineering sciences and mathematics, develop AI systems or technologies, such as machine learning methods. Grants within MINT that do not themselves develop AI methods generally apply these methods in different disciplines to analyse data, to make simulations, to process images or to improve the capabilities of robots, for example.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">AI key terms in MINT grants </div>
+```{r plot-desktop-4}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_4()
+
+```
+::: caption
+Figure 4. Ranking of the 10 most prevalent AI-related key terms in MINT grants over time. If a key term drops out of the top 10 until the end of the observation period, the line is discontinued. If a key term drops out of the top 10 temporarily, the line becomes transparent until the key term once again enters the top 10. 
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">AI key terms in MINT grants </div>
+```{r plot-mobile-4}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_4()
+
+```
+::: caption
+Figure 4. Ranking of the 10 most prevalent AI-related key terms in MINT grants over time. If a key term drops out of the top 10 until the end of the observation period, the line is discontinued. If a key term drops out of the top 10 temporarily, the line becomes transparent until the key term once again enters the top 10. 
+:::
+:::
+:::
+
+In LS, the most frequent key terms are “machine learning”, “artificial intellig\*”, “deep learning”, “neural net\*”, “reinforcement learning”, “computer vision”, and “pattern recognition” (Figure 5). Many of the identified grants apply a wide variety of machine learning methods to analyse data and images to answer specific research questions, to develop diagnostic tools and therapeutic interventions and to predict treatment outcomes. While the focus in these grants is on the application of AI to answer research questions, there are cases in which the research findings feed back into the further development of such methods.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">AI key terms in LS grants </div>
+```{r plot-desktop-5}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_5()
+
+```
+::: caption
+Figure 5. Ranking of the 10 most prevalent AI-related key terms in LS grants over time. If a key term drops out of the top 10 until the end of the observation period, the line is discontinued. If a key term drops out of the top 10 temporarily, the line becomes transparent until the key term once again enters the top 10. 
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">AI key terms in LS grants </div>
+```{r plot-mobile-5}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_5()
+
+```
+::: caption
+Figure 5. Ranking of the 10 most prevalent AI-related key terms in LS grants over time. If a key term drops out of the top 10 until the end of the observation period, the line is discontinued. If a key term drops out of the top 10 temporarily, the line becomes transparent until the key term once again enters the top 10. 
+:::
+:::
+:::
+
+### A strong basis for further analyses
+
+We see that funded research related to AI increased considerably across all research domains, especially over the last eight years. In the process, we have described an approach based on searching grant applications for a set of AI-related key terms to identify AI-related research at the SNSF. This method has been widely used by research organisations and in bibliometric studies to provide an overview of the field of AI and its development. The adopted approach is transparent, reproducible and scalable. For example, new key terms can be added, or the approach can be applied to other data such as publications. Due to the rapid evolution of AI, our list of key terms will require periodic updating to include the latest developments. Furthermore, the set of key terms can be strategically adapted in order to answer new questions.
+
+Using a static list of key terms has drawbacks. Their selection naturally influences the identification of grants, and no choice of key terms will perfectly identify all grants related to AI. In a preliminary analysis, we compared three different key terms lists and refined our approach to maximise the inclusion of AI-related research while keeping the false positives low. Nonetheless, AI-related grants that do not use any of these key terms in their titles, keywords or summaries will be missed. Due to different uses of AI across different research domains, it is unclear whether the approach is comparable for all research domains. While the approach is useful in identifying research that is related to AI, more detailed analyses of the grants would be required to better understand the role of AI in each grant. However, we are convinced that this approach provides a strong basis to identify research related to AI at the SNSF and further analyse its content. 
+
+The SNSF will use this approach to develop a better understanding of AI-related research, which will be helpful in tailoring its application and evaluation processes. This will also allow us to monitor the outputs of such research. Beyond these analyses, the SNSF is monitoring national and international developments on AI in research to be prepared to adapt to relevant changes in the research landscape.
+
+::: info-box
+
+### What type of data did we use? 
+
+The basis for this analysis was all the grants written in English from Project and Career funding awarded between 2011 and 2024. The sample includes a total of 21,784 grants. We included all variables necessary to identify the grants and to perform the key term search as well as some further information: title, keywords, summary, grant number, funding scheme, research domain and disciplines.
+
+To analyse the occurrences of the different key terms, we quantified the number of grants in which each key term occurred. Each key term was only counted once per grant. Thus, even if a term appeared multiple times, for example in the title and summary of a grant, it was only counted once.
+
+### How did we identify AI-related grants?
+
+For all included grants, we searched titles, keywords and summaries of the applications for a list of key AI-related terms. If these parts of a proposal contained at least one term, it was defined as AI-related and included in the analysis for this data story. We classified some of the terms as ambiguous (terms marked with a section symbol in the list of key terms). Ambiguous terms required the presence of at least one additional AI-related term in the title, keywords or summary for a grant to be classified as AI-related.
+
+:::
+
+Data, text and code of this data story are [available on Github](`r params$github_url`) and [archived on Zenodo](`r params$doi_url`).<br>DOI: `r str_remove(params$doi_url, "https://doi.org/")`
+
+```{r prevent-internal-snsf-packages}
+#| include: false
+
+# Internal SNSF packages must not be used in data stories, as their
+# pre-processing functions are internal and the corporate design differs from
+# the data portal.
+
+internal_pkg <- c("snfverse", "snf.preprocessing", "snf.plot")
+
+if (any(internal_pkg %in% loadedNamespaces())) {
+  stop(glue(
+    "You must not use internal SNSF packages in data stories.",
+    " Please resort to snf.datastory."
+  ))
+}
+```

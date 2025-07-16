@@ -1,0 +1,460 @@
+---
+title: "`r params$title`"
+format:
+  html:
+    toc: false
+    css: ["style.css"]
+    mainfont: Theinhardt
+    fontsize: "16px"
+    embed-resources: true
+    page-layout: custom
+    link-external-newwindow: true
+    footnotes-hover: true
+    fig-align: center
+    fig-format: retina
+    fig-dpi: 300
+language:
+  section-title-footnotes: "Fussnoten"
+params:
+  title: "Wie viele Forschungsprojekte mit SNF-Beiträgen betreffen künstliche Intelligenz?"
+  lead: "Zwischen 2011 und 2024 hat das Thema Künstliche Intelligenz in den vom SNF unterstützten Forschungsprojekten deutlich an Bedeutung gewonnen. Wir zeigen, welche KI-Methoden in den einzelnen Forschungsbereichen dominieren."
+  publication_date: "2025-07-17 04:00:00"
+  lang: de
+  use_theinhardt: false
+  reg_font_path: ""
+  bold_font_path: ""
+  it_font_path: ""
+  boldit_font_path: ""
+  doi_url: "https://doi.org/10.46446/datastory.ai-related-grants"
+  github_url: "https://github.com/snsf-data/datastory_ai_related_grants"
+execute:
+  echo: false
+  warning: false
+  message: false
+editor_options:
+  chunk_output_type: console
+---
+
+```{r general-setup}
+#| include: false
+
+# Install snf.datastory package if not available, otherwise load it
+if (!require("snf.datastory")) {
+  if (!require("devtools")) {
+    install.packages("devtools")
+    library(devtools)
+  }
+  install_github("snsf-data/snf.datastory")
+  library(snf.datastory)
+}
+
+# Load packages
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(conflicted)
+library(here)
+library(ggiraph)
+library(showtext)
+library(systemfonts)
+library(dplyr)
+library(forcats)
+library(readr)
+library(camcorder)
+library(devtools)
+library(ggbump)
+library(ggplot2)
+library(glue)
+library(purrr)
+library(snf.datastory)
+library(stringr)
+
+# Conflict preferences
+conflict_prefer("filter", "dplyr")
+conflict_prefer("get_datastory_theme", "snf.datastory")
+conflict_prefer("get_datastory_scheme", "snf.datastory")
+
+source("R/read_and_prepare_data.R")
+source("R/make_figures.R")
+source("R/utils.R")
+
+use_theinhardt <- params$use_theinhardt
+
+if (use_theinhardt) {
+
+  # Need to register the font to allow its use by ggiraph when creating SVG
+  # files.
+  if (!font_family_exists("Theinhardt")) {
+
+    # Register existing/downloaded fonts
+    register_font(
+      name = "Theinhardt",
+      plain = list(params$reg_font_path, 0),
+      bold = list(params$bol_font_path, 0),
+      italic = list(params$boldit_font_path, 0),
+      bolditalic = list(params$boldit_font_path, 0)
+    )
+  }
+
+  font <- "Theinhardt"
+
+} else {
+
+  font <- "sans"
+
+}
+
+# Need if we want to use the registered font in ggiraph plots
+showtext_auto()
+
+# Increase showtext package font resolution
+showtext_opts(dpi = 300 * 2)
+
+# Set the locale for date formatting (Windows)
+Sys.setlocale(
+  "LC_TIME",
+  switch(
+    params$lang,
+    en = "English",
+    de = "German",
+    fr = "French"
+  )
+)
+
+# Create function to print number with local language-specific format
+print_num <- function(x, lang) {
+
+  if (!(lang %in% c("en", "de", "fr")))
+    stop("`lang` must match any of 'en', 'de', or 'fr'")
+
+  sapply(
+    x,
+    \(x) if (x >= 10000) {
+      if (lang == "en") prettyNum(x, big.mark = ",", decimal.mark = ".")
+      else prettyNum(x, big.mark = "'", decimal.mark = ",")
+    }
+    else {
+      if (lang == "en") prettyNum(x, big.mark = "", decimal.mark = ".")
+      else prettyNum(x, big.mark = "", decimal.mark = ",")
+    })
+}
+
+# Knitr hook for local formatting of printed numbers
+knitr::knit_hooks$set(
+  inline = function(x) {
+    if (!is.numeric(x)) {
+      x
+    } else {
+      print_num(x, params$lang)
+    }
+  }
+)
+
+```
+
+```{r print-header-infos}
+#| results: asis
+
+# Add publication date to header
+cat(format(as.Date(params$publication_date), "%d.%m.%Y"))
+```
+
+**`r params$lead`**
+
+Es überrascht nicht, dass der Anteil an Forschung mit KI-Bezug in allen Fachbereichen zunimmt. Wer aktuelle Schlagzeilen liest, könnte vermuten, dass sich fast alle Projekte um KI drehen. Doch die Realität ist facettenreicher. Für differenzierte Ergebnisse wird in dieser Datengeschichte zunächst definiert, was als Forschung mit KI-Bezug gilt. Danach wird der Anteil entsprechender Projekte an allen vom SNF gewährten Förderbeiträgen in den letzten 14 Jahren beziffert.  
+
+Während die Entwicklung von KI-Tools in der Regel im Bereich MINT (Mathematik, Informatik, Naturwissenschaften und Technik) geschieht, ist die Anwendung von KI gemäss Studien in allen wissenschaftlichen Disziplinen verbreitet.[^2] Auch gesellschaftliche Auswirkungen der KI werden mit SNF-Beiträgen erforscht. In der zweiten Hälfte des Berichts haben wir deshalb anhand der häufig verwendeten Schlüsselbegriffe aufgezeigt, welche spezifischen KI-Anwendungen im untersuchten Zeitraum in den drei Forschungsbereichen dominieren.
+
+[^2]: [Artificial Intelligence for Science report - CSIRO](https://www.csiro.au/en/research/technology-space/ai/Artificial-Intelligence-for-Science-report).
+
+Die textuelle Analyse der Fördergesuche bietet eine Grundlage für ein besseres Verständnis der Rolle von KI in den vom SNF unterstützten Forschungsprojekten. Wir haben dazu eine transparente und reproduzierbare Strategie angewendet und Forschungsprojekte mit KI-Bezug anhand von Schlüsselbegriffen identifiziert. Es lassen sich drei Kategorien ausmachen: Während ein Teil der Projekte mit KI-Bezug der Entwicklung von KI-Systemen oder -Techniken dient, werden KI-Methoden bei anderen Projekten zur Beantwortung von Forschungsfragen eingesetzt. Die dritte Kategorie betrifft Projekte zur Untersuchung der gesellschaftlichen Auswirkungen der KI, unabhängig davon, ob dabei auch KI-Methoden eingesetzt werden.  
+
+Die Gestaltung der Zukunft der Forschung gehört zu den strategischen Prioritäten des SNF. Die Ergebnisse dieser Datenanalyse können als Grundlage für breitere Diskussionen über die Auswirkungen der KI sowohl auf die Forschung selber als auch auf die Förderpolitik dienen. 
+
+### SNF-Monitoring zu Forschung mit KI-Bezug 
+
+KI umfasst ein breites Spektrum von Technologien und Methoden wie maschinelles Lernen, neuronale Netze und Sprachverarbeitung (siehe blauer Kasten für Definitionen wichtiger KI-Konzepte). Auf der Grundlage früherer Studien[^3] haben wir eine vordefinierte Liste von KI-bezogenen Schlüsselbegriffen verwendet und damit die Titel, Keywords und Zusammenfassungen der vom SNF unterstützten Projekte durchsucht. Die Verwendung dieser Liste war eine wichtige und bewusste Entscheidung, da je nach Studie unterschiedliche Listen von KI-bezogenen Begriffen verwendet werden.
+
+[^3]: [Mapping ERC frontier research artificial intelligence - Publications Office of the EU](https://op.europa.eu/de/publication-detail/-/publication/c7865738-eb38-11ee-bf53-01aa75ed71a1); [Identifying and measuring developments in artificial intelligence | OECD](https://www.oecd.org/en/publications/identifying-and-measuring-developments-in-artificial-intelligence_5f65ff7e-en.html).
+
+::: info-box
+
+### Schlüsselkonzepte der künstlichen Intelligenz
+
+- **Künstliche Intelligenz:** Begriff, der sich im weitesten Sinn auf die Reproduktion menschlicher Intelligenz in Maschinen bezieht. Es gibt keine allgemeingültige Definition von KI. Im KI-Gesetz der EU wird der Begriff KI-System definiert als «ein maschinengestütztes System, das so konzipiert ist, dass es mit unterschiedlichem Grad an Autonomie betrieben werden kann und nach seiner Einführung Anpassungsfähigkeit zeigt, und das für explizite oder implizite Ziele aus den Eingaben, die es erhält, ableitet, wie es Ausgaben wie Vorhersagen, Inhalte, Empfehlungen oder Entscheidungen generieren kann, die physische oder virtuelle Umgebungen beeinflussen können.»[^4] 
+
+
+- **Maschinelles Lernen:** Verwendung und Entwicklung statistischer Algorithmen, die in der Lage sind, Muster in Daten zu erkennen und auf der Grundlage dieser Muster Entscheidungen oder Vorhersagen ohne explizite Anweisungen zu treffen.
+- **Neuronales Netz:** In der Informatik bezeichnet ein neuronales Netz ein Computermodell, das sich am menschlichen Gehirn orientiert. Es besteht aus miteinander verbundenen Knoten (Neuronen), die Informationen in Schichten verarbeiten. 
+- **Deep Learning:** Ein Teilbereich des maschinellen Lernens. Zur Analyse komplexer Muster in grossen Datensätzen werden künstliche neuronale Netze mit vielen Schichten (tiefe neuronale Netze) verwendet.
+- **Natural Language Processing (NLP):** In diesem Fachgebiet wird Maschinen beigebracht, menschliche Sprache zu verstehen, zu interpretieren und darauf zu antworten. Wichtige Aufgaben sind dabei Spracherkennung, Klassifikation von Texten und Erzeugung natürlicher Sprache.
+- **Computer Vision:** Maschinen werden befähigt, visuelle Daten zu interpretieren und davon ausgehend Entscheidungen zu treffen. Dabei werden Methoden des maschinellen Lernens verwendet, um Objekte zu erkennen, Muster auszumachen und Erkenntnisse aus Bildern und Videos zu gewinnen.
+
+[^4]: [Artikel 3: Definitionen | EU-Gesetz über künstliche Intelligenz](https://artificialintelligenceact.eu/de/article/3/), 2025.
+
+:::
+
+Zur Identifikation von Forschung mit KI-Bezug in den vom SNF geförderten Projekten wurden die Titel, Keywords und Zusammenfassungen der Projekte nach einer Liste von Schlüsselbegriffen (Tabelle 1) durchsucht. Diese Liste wurde in einer von der Europäischen Kommission durchgeführten bibliometrischen Analyse[^5] veröffentlicht, bei der Methodik haben wir aber Anpassungen vorgenommen. Unter anderem wurden mehrdeutige Begriffe identifiziert, die sich auf ein Konzept mit KI-Bezug beziehen können, aber auch auf etwas anderes (z. B. kann sich «neural net\*» auch auf ein biologisches neuronales Netz beziehen, und «face detection» kann sich auch auf die menschliche Fähigkeit beziehen, ein Gesicht zu erkennen). Wenn ein Förderbeitrag einen dieser mehrdeutigen Begriffe enthielt, musste ein zweiter Begriff vorhanden sein, damit der Beitrag als KI-bezogen klassifiziert wurde.
+
+[^5]: [Trends in the use of AI in science - Publications Office of the EU](https://op.europa.eu/de/publication-detail/-/publication/2458267c-08df-11ee-b12e-01aa75ed71a1).
+
+::: plot-box
+<div class="plot-title">Liste der KI-bezogenen Schlüsselbegriffe für die Analyse</div>
+```{r table-1}
+#| classes: plain
+
+table_1 <-
+  matrix(
+    c(
+      "Artificial intellig*", "Gesture recognition (§)", "Meta-learning", "Semi-supervised learning",
+      "Automated reasoning", "Image classification", "Multilayer perceptron*", "Sentiment analysis",
+      "Backpropagation", "Image recognition", "Natural language processing", "Speech recognition (§)",
+      "Computer vision", "Image segmentation", "Neural net* (§)", "Statistical learning",
+      "Data mining (§)", "Information retrieval (§)", "Object detection (§)", "Supervised learning",
+      "Data science (§)", "Intelligent machine*", "Object identification (§)", "Text classification",
+      "Deep learning", "Kernel machine*", "Object recognition (§)**", "Transfer learning",
+      "Expert system*", "Knowledge representation", "Pattern recognition (§)", "Transformer net*",
+      "Face detection (§)", "Machine intelligence", "Pose estimation", "Unsupervised learning",
+      "Feature extraction", "Machine learning", "Reinforcement learning", "Voice recognition (§)",
+      "General adversarial net*", "Machine translation", "Semantic search", ""
+    ),
+    nrow = 11,
+    ncol = 4,
+    byrow = TRUE
+  )
+
+gt::gt(as.data.frame(table_1)) |>
+  gt::tab_options(table.align = "left",column_labels.hidden = TRUE)
+
+```
+::: caption
+Tabelle 1: Begriffe, die mit einem Paragrafensymbol (§) gekennzeichnet sind, wurden als mehrdeutig eingestuft, und das Projekt wurde nur als KI-bezogen klassifiziert, wenn ein zweiter KI-bezogener Begriff vorkam. Bei einigen Begriffen wurde wie in der Studie der Europäischen Kommission mit Stemming gesucht (z. B. neural net\*).
+:::
+:::
+
+### Zunahme der Forschung mit KI-Bezug
+
+Anhand dieser Schlüsselbegriffe wurden für den Zeitraum 2011 bis 2024 insgesamt 1306 Forschungsprojekte mit KI-Bezug identifiziert, was rund 6 % aller vom SNF in diesem Zeitraum gewährten Förderbeiträge entspricht. Der Anteil lag bis 2017 unter 5 %, ab 2021 hingegen über der Schwelle von 10 % (Abbildung 1). 47 % der identifizierten Beiträge betrafen den MINT-Bereich (Mathematik, Informatik, Naturwissenschaften und Technik, 23 % solche aus mehr als einem Forschungsbereich[^6], 16 % die Lebenswissenschaften (LW) und 14 % die Geistes- und Sozialwissenschaften (GSW).
+
+[^6]: Mehrere Bereiche bedeutet, dass beim betreffenden Beitragsgesuch Disziplinen aus mehr als einem der drei Forschungsbereiche (GSW, MINT oder LW) als Hauptdisziplinen angegeben waren.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">Anteil geförderte Projekte mit KI-Bezug steigt seit 2017</div>
+```{r plot-desktop-1}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_desktop_figure_1()
+
+```
+::: caption
+Abbildung 1. Anteil der geförderten Projekte mit mindestens einem KI-bezogenen Schlüsselbegriff im Titel, in den Keywords oder in der Zusammenfassung (bzw. mit mindestens zwei Schlüsselbegriffen bei Mehrdeutigkeit).
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">Anteil geförderte Projekte mit KI-Bezug steigt seit 2017</div>
+```{r plot-mobile-1}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_mobile_figure_1()
+
+```
+::: caption
+Abbildung 1. Anteil der geförderten Projekte mit mindestens einem KI-bezogenen Schlüsselbegriff im Titel, in den Keywords oder in der Zusammenfassung (bzw. mit mindestens zwei Schlüsselbegriffen bei Mehrdeutigkeit).
+:::
+:::
+:::
+
+ 
+
+In allen Forschungsbereichen war eine Zunahme an Forschungsprojekten mit KI-Bezug zu beobachten (Abbildung 2). Der höchste Anteil resultierte für Projekte aus mehr als einem Forschungsbereich. Während dieser Wert bis 2017 unter 10 % lag, überstieg er 2023 erstmals 20 %. Die interdisziplinäre Zusammenarbeit ist in der KI-Forschung von zentraler Bedeutung, da sie die effektive Anwendung von KI-Methoden in verschiedenen Forschungsbereichen begünstigt. Ausserdem ist der Einbezug von Ideen und Forschungsfragen aus mehreren Disziplinen ein wichtiger Treiber für die Entwicklung von KI-Technologien.[^7]
+
+[^7]: [Frontiers | Interdisciplinary Research in Artificial Intelligence:](https://www.frontiersin.org/journals/big-data/articles/10.3389/fdata.2020.577974/full)[ Challenges and Opportunities](https://www.frontiersin.org/journals/big-data/articles/10.3389/fdata.2020.577974/full).
+
+Ein ähnlicher Anstieg der Projekte mit KI-Bezug war in den MINT-Fächern zu verzeichnen: 2019 stieg dieser Wert erstmals über 10 % und 2023 über 20 %. Auch in LW und GSW gewann Forschung mit KI-Bezug an Bedeutung, allerdings von einem niedrigeren Ausgangsniveau aus und weniger ausgeprägt als bei den MINT-Projekten und den bereichsübergreifenden Projekten. In den GSW lag der Anteil der Projekte mit KI-Bezug bis 2017 unter 5 %, 2023 überstieg er 10 %. In den LW betrug der Anteil der KI-bezogenen Beiträge bis 2020 weniger als 5 %, seither schwankt der Wert zwischen 5 und 10 %.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">Der Anteil der KI-bezogenen Projekte hat bei den bereichsübergreifenden Projekten und bei den MINT-Beiträgen stärker zugenommen</div>
+```{r plot-desktop-2}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_desktop_figure_2()
+
+```
+::: caption
+Abbildung 2. Anteil der Beiträge mit mindestens einem KI-bezogenen Schlüsselbegriff im Titel, in den Keywords oder in der Zusammenfassung (bzw. mit mindestens zwei Schlüsselbegriffen bei Mehrdeutigkeit), aufgeschlüsselt nach Forschungsbereichen.
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">Der Anteil der KI-bezogenen Projekte hat bei den bereichsübergreifenden Projekten und bei den MINT-Beiträgen stärker zugenommen</div>
+```{r plot-mobile-2}
+#| out-width: "100%"
+#| fig-height: 3
+
+make_mobile_figure_2()
+
+```
+::: caption
+Abbildung 2. Anteil der Beiträge mit mindestens einem KI-bezogenen Schlüsselbegriff im Titel, in den Keywords oder in der Zusammenfassung (bzw. mit mindestens zwei Schlüsselbegriffen bei Mehrdeutigkeit), aufgeschlüsselt nach Forschungsbereichen.
+:::
+:::
+:::
+
+### Schlüsselbegriffe nach Forschungsbereichen
+
+Bei allen identifizierten KI-bezogenen Projekten sind die häufigsten Schlüsselbegriffe «machine learning», «artificial intellig\*», «deep learning», «neural net\*» und «computer vision». Der Grund dürfte darin liegen, dass diese Begriffe weit gefasst sind und eher eine Gruppe von Konzepten, Methoden oder Anwendungen als eine spezifische Methode bezeichnen. Die folgenden Abbildungen zeigen die 10 häufigsten Schlüsselbegriffe für Beiträge in den Bereichen GSW bzw. MINT und LW über den Analysezeitraum. In diesen Visualisierungen wurden keine bereichsübergreifenden Beiträge berücksichtigt, da diese heterogener sind.
+
+In den GSW ist der häufigste Begriff – nach «artificial intellig\*» und «machine learning» – «natural language processing», gefolgt von «deep learning», «data science», «reinforcement learning» und «neural net\*» (Abbildung 3). Es erstaunt nicht, dass Natural Language Processing (NLP) in den GSW häufig genutzt wird, da sich diese Methode zur Analyse grosser Textkorpora eignet. 
+
+Ein Blick auf die Zusammenfassungen der identifizierten GSW-Projekte zeigt, dass die Projekte häufig in zwei Kategorien fallen. Entweder werden KI oder Methoden des maschinellen Lernens angewendet, um Forschungsfragen zu beantworten. Zum Beispiel analysierten Forschende im Rahmen eines [im Jahr 2020 gewährten Beitrags](https://data.snf.ch/grants/grant/197640) einen Korpus von Wahlprogrammen mithilfe von NLP, um zu ermitteln, wie sich die Identitäten politischer Parteien im Laufe der Zeit entwickeln können. Andere KI-bezogene GSW-Projekte widmeten sich der Frage, welchen Einfluss die Entwicklung und der Einsatz von KI auf die Gesellschaft haben. Auf der Grundlage einer Dokumentenanalyse in Kombination mit einer Umfrage und Experteninterviews wollten die Forschenden im Rahmen eines [2024 vergebenen Beitrags](https://data.snf.ch/grants/grant/10003244) beispielsweise in Erfahrung bringen, wie öffentliche Verwaltungen KI in ihrer Praxis einsetzen und unter welchen Bedingungen die Bevölkerung eine solche Nutzung unterstützt. 
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">KI-Schlüsselbegriffe in GSW-Projekten</div>
+```{r plot-desktop-3}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_3()
+
+```
+::: caption
+Abbildung 3. Rangfolge der 10 häufigsten KI-bezogenen Schlüsselbegriffe in GSW-Projekten im Zeitverlauf. Fällt ein Schlüsselbegriff bis zum Ende des Beobachtungszeitraums aus den Top 10 heraus, wird die Zeile nicht mehr weitergeführt. Fällt ein Schlüsselbegriff vorübergehend aus den Top 10 heraus, wird die Zeile transparent, bis der Schlüsselbegriff wieder in die Top 10 aufsteigt. 
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">KI-Schlüsselbegriffe in GSW-Projekten</div>
+```{r plot-mobile-3}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_3()
+
+```
+::: caption
+Abbildung 3. Rangfolge der 10 häufigsten KI-bezogenen Schlüsselbegriffe in GSW-Projekten im Zeitverlauf. Fällt ein Schlüsselbegriff bis zum Ende des Beobachtungszeitraums aus den Top 10 heraus, wird die Zeile nicht mehr weitergeführt. Fällt ein Schlüsselbegriff vorübergehend aus den Top 10 heraus, wird die Zeile transparent, bis der Schlüsselbegriff wieder in die Top 10 aufsteigt. 
+:::
+:::
+:::
+
+In den MINT-Fächern sind die am weitesten verbreiteten Schlüsselbegriffe «machine learning», «neural net\*», «deep learning», «computer vision», «artificial intellig\*», «reinforcement learning» und «data science». Viele der geförderten Projekte, insbesondere in den Ingenieurwissenschaften und der Mathematik, dienen der Entwicklung von KI-Systemen oder -Technologien, z. B. Methoden des maschinellen Lernens. Werden bei Projekten im MINT-Bereich nicht selber KI-Methoden entwickelt, dann geht es in der Regel darum, in verschiedenen Disziplinen Daten zu analysieren, Simulationen durchzuführen, Bilder zu verarbeiten oder die Fähigkeiten von Robotern zu verbessern.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">KI-Schlüsselbegriffe in MINT-Projekten </div>
+```{r plot-desktop-4}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_4()
+
+```
+::: caption
+Abbildung 4. Rangliste der 10 häufigsten KI-bezogenen Schlüsselbegriffe in MINT-Projekten im Zeitverlauf. Fällt ein Schlüsselbegriff bis zum Ende des Beobachtungszeitraums aus den Top 10 heraus, wird die Zeile nicht mehr weitergeführt. Fällt ein Schlüsselbegriff vorübergehend aus den Top 10 heraus, wird die Zeile transparent, bis der Schlüsselbegriff wieder in die Top 10 aufsteigt. 
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">KI-Schlüsselbegriffe in MINT-Projekten </div>
+```{r plot-mobile-4}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_4()
+
+```
+::: caption
+Abbildung 4. Rangliste der 10 häufigsten KI-bezogenen Schlüsselbegriffe in MINT-Projekten im Zeitverlauf. Fällt ein Schlüsselbegriff bis zum Ende des Beobachtungszeitraums aus den Top 10 heraus, wird die Zeile nicht mehr weitergeführt. Fällt ein Schlüsselbegriff vorübergehend aus den Top 10 heraus, wird die Zeile transparent, bis der Schlüsselbegriff wieder in die Top 10 aufsteigt. 
+:::
+:::
+:::
+
+In den LW sind die häufigsten Schlüsselbegriffe «machine learning», «artificial intellig\*», «deep learning», «neural net\*», «reinforcement learning», «computer vision» und «pattern recognition» (Abbildung 5). Bei vielen identifizierten Projekten wird eine breite Palette von Methoden des maschinellen Lernens zur Analyse von Daten und Bildern eingesetzt, um spezifische Forschungsfragen zu beantworten, Diagnoseinstrumente und Behandlungen zu entwickeln und Behandlungsergebnisse vorherzusagen. Während der Schwerpunkt bei den LW-Beiträgen auf der Anwendung von KI zur Beantwortung von Forschungsfragen liegt, gibt es auch Fälle, in denen die Forschungsergebnisse in die Weiterentwicklung solcher Methoden einfliessen.
+
+::: {.hide-mobile .hide-tablet}
+::: plot-box
+<div class="plot-title">KI-Schlüsselbegriffe in LW-Projekten </div>
+```{r plot-desktop-5}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_desktop_figure_5()
+
+```
+::: caption
+Abbildung 5. Rangliste der 10 häufigsten KI-bezogenen Schlüsselbegriffe in LW-Projekten im Zeitverlauf. Fällt ein Schlüsselbegriff bis zum Ende des Beobachtungszeitraums aus den Top 10 heraus, wird die Zeile nicht mehr weitergeführt. Fällt ein Schlüsselbegriff vorübergehend aus den Top 10 heraus, wird die Zeile transparent, bis der Schlüsselbegriff wieder in die Top 10 aufsteigt. 
+:::
+:::
+:::
+
+::: {.hide-desktop}
+::: plot-box
+<div class="plot-title">KI-Schlüsselbegriffe in LW-Projekten </div>
+```{r plot-mobile-5}
+#| out-width: "100%"
+#| fig-height: 3.5
+
+make_mobile_figure_5()
+
+```
+::: caption
+Abbildung 5. Rangliste der 10 häufigsten KI-bezogenen Schlüsselbegriffe in LW-Projekten im Zeitverlauf. Fällt ein Schlüsselbegriff bis zum Ende des Beobachtungszeitraums aus den Top 10 heraus, wird die Zeile nicht mehr weitergeführt. Fällt ein Schlüsselbegriff vorübergehend aus den Top 10 heraus, wird die Zeile transparent, bis der Schlüsselbegriff wieder in die Top 10 aufsteigt. 
+:::
+:::
+:::
+
+### Grundlage für weitere Analysen
+
+In der vom SNF unterstützten Forschung hat der Anteil Projekte mit KI-Bezug somit in allen Bereichen deutlich zugenommen, vor allem in den letzten acht Jahren. Unser Analyseansatz beruhte darauf, die Fördergesuche nach einer Liste von KI-bezogenen Schlüsselbegriffen zu durchsuchen und so die vom SNF unterstützten Forschungsprojekte mit KI-Bezug zu identifizieren. Diese Methode wird von Forschungseinrichtungen und in bibliometrischen Studien häufig verwendet, um einen Überblick über den Bereich der künstlichen Intelligenz und dessen Entwicklung zu geben. Dieser Ansatz ist transparent, reproduzierbar und skalierbar. So können zum Beispiel neue Schlüsselbegriffe hinzugefügt oder der Ansatz kann auf andere Daten wie Publikationen angewendet werden. Aufgrund der raschen Entwicklung der KI muss die Liste der Schlüsselbegriffe regelmässig aktualisiert werden, damit die neuesten Entwicklungen einfliessen. Zur Beantwortung neuer Fragen kann die Liste der Schlüsselbegriffe zudem strategisch angepasst werden. 
+
+Die Verwendung dieser statischen Methode mit Schlüsselbegriffen hat jedoch auch Nachteile. Die Wahl der Begriffe beeinflusst die Identifikation der Projekte, und es gibt keine Liste von Begriffen, mit denen restlos alle KI-Beiträge identifiziert werden. In einer ersten Analyse haben wir drei verschiedene Listen mit Schlüsselbegriffen verglichen und unseren Ansatz optimiert, um möglichst alle Forschungsprojekte mit KI-Bezug zu erfassen und gleichzeitig die Zahl der falsch positiven Ergebnisse möglichst gering zu halten. Nicht erfasst werden damit jedoch Projekte mit KI-Bezug, die keinen dieser Schlüsselbegriffe in Titel, Keywords oder Zusammenfassung aufweisen. Da KI je nach Forschungsbereich unterschiedlich eingesetzt wird, ist unklar, ob der Ansatz für alle Forschungsbereiche gleich aussagekräftig ist. Die genaue Rolle der KI bei den einzelnen Projekten lässt sich nur mit detaillierteren Analysen in Erfahrung bringen. Wir sind jedoch überzeugt, dass der Ansatz eine geeignete Grundlage bildet, um Projekte mit KI-Bezug zu identifizieren, ebenso als Ausgangspunkt für weiterführende inhaltliche Analyse. 
+
+Der SNF will damit ein besseres Verständnis der Forschung mit KI-Bezug entwickeln und die Gesuchs- und Evaluationsverfahren bei Bedarf entsprechend anpassen. Auch die Ergebnisse der KI-bezogenen Forschung lassen sich damit besser beurteilen. Zusätzlich beobachtet der SNF die nationale und internationale Entwicklung in der KI-bezogenen Forschung. Ziel ist es, relevante Veränderungen in der Forschungslandschaft frühzeitig zu erkennen und darauf zu reagieren. 
+
+::: info-box
+
+### Welche Art von Daten wurden verwendet? 
+
+Grundlage für diese Analyse waren alle auf Englisch verfassten Gesuche aus der Projekt- und Karriereförderung, für die zwischen 2011 und 2024 ein Beitrag bewilligt wurde. Die Stichprobe umfasste insgesamt 21’784 Beiträge. Einbezogen wurden alle Variablen, die für die Identifizierung der Beiträge und die Durchsuchung nach den Schlüsselbegriffen erforderlich sind, sowie einige weitere Informationen: Titel, Keywords, Zusammenfassung, Beitragsnummer, Förderinstrument, Forschungsbereich und Disziplinen.
+
+Zur Analyse der Häufigkeit der einzelnen Schlüsselbegriffe wurde die Zahl der Beiträge bestimmt, in denen die Schlüsselbegriffe vorkamen. Jeder Schlüsselbegriff wurde nur einmal pro Beitrag gezählt. Wenn ein Begriff mehrmals vorkam, zum Beispiel in Titel und Zusammenfassung eines Gesuchs, wurde er nur einmal gezählt.
+
+### Wie wurden die Projekte mit KI-Bezug identifiziert?
+
+Bei allen eingeschlossenen Beiträgen wurden Titel, Keywords und Zusammenfassung der Gesuche nach einer Liste von KI-Schlüsselbegriffen durchsucht. Wenn darin mindestens ein Schlüsselbegriff enthalten war, wurde das Projekt als KI-bezogen klassifiziert und in die Analyse für diese Datengeschichte einbezogen. Einige Begriffe wurden als mehrdeutig eingestuft (Begriffe, die in der Liste der Schlüsselbegriffe ein Paragrafensymbol aufweisen). Bei mehrdeutigen Begriffen musste mindestens ein weiterer KI-bezogener Begriff im Titel, in den Keywords oder in der Zusammenfassung vorkommen, damit der Beitrag als KI-bezogen eingestuft wurde.
+
+:::
+
+Daten, Text und Code dieser Datengeschichte sind [auf Github verfügbar](`r params$github_url`) und [auf Zenodo archiviert](`r params$doi_url`). <br>DOI: `r str_remove(params$doi_url,"https://doi.org/")`
+
+```{r prevent-internal-snsf-packages}
+#| include: false
+
+# Internal SNSF packages must not be used in data stories, as their
+# pre-processing functions are internal and the corporate design differs from
+# the data portal.
+
+internal_pkg <- c("snfverse", "snf.preprocessing", "snf.plot")
+
+if (any(internal_pkg %in% loadedNamespaces())) {
+  stop(glue(
+    "You must not use internal SNSF packages in data stories.",
+    " Please resort to snf.datastory."
+  ))
+}
+```

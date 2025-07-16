@@ -1,0 +1,25 @@
+[
+  {
+    "title_en": "How much of SNSF-funded research is related to artificial intelligence?",
+    "title_de": "Wie viele Forschungsprojekte mit SNF-Beiträgen betreffen künstliche Intelligenz?",
+    "title_fr": "Quelle part de projets financés par le FNS ont un lien avec l’intelligence artificielle ?",
+    "author_en": "Manuel Klaus, Research Analyses, SNSF;Simon Gorin, Data Team, SNSF",
+    "author_de": "Manuel Klaus, Forschungsanalysen, SNF;Simon Gorin, Datenteam, SNF",
+    "author_fr": "Manuel Klaus, analyses de la recherche, FNS;Simon Gorin, Data Team, FNS",
+    "datastory_category": "standard",
+    "publication_date_en": "2025-07-17 04:00:00",
+    "publication_date_de": "2025-07-17 04:00:00",
+    "publication_date_fr": "2025-07-17 04:00:00",
+    "languages": "en;de;fr",
+    "short_desc_en": "SNSF-funded research related to AI increased significantly between 2011 and 2024. By applying an approach using key terms to identify AI-related grants, we could illustrate the methods preferred by the different research domains.",
+    "short_desc_de": "Zwischen 2011 und 2024 hat das Thema Künstliche Intelligenz in den vom SNF unterstützten Forschungsprojekten deutlich an Bedeutung gewonnen. Wir zeigen, welche KI-Methoden in den einzelnen Forschungsbereichen dominieren.",
+    "short_desc_fr": "Entre 2011 et 2024, les subsides liés à l’intelligence artificielle ont considérablement augmenté au FNS. Grâce à des termes clés, nous avons identifié quelles méthodes d’IA dominent dans les différents domaines de recherche.",
+    "tags": "T80T,T220T,T290T,T160T",
+    "top_story": "false",
+    "github_url": "https://github.com/snsf-data/datastory_ai_related_grants",
+    "doi": "https://doi.org/10.46446/datastory.ai-related-grants",
+    "name_en": "ai-related-grants",
+    "name_de": "forschung-mit-ki-bezug",
+    "name_fr": "recherche-financee-liee-a-l-ia"
+  }
+]
